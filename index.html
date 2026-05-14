@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>林建DX：データインポート・分析</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;500;700&swap" rel="stylesheet">
+  
+  <style id="dynamic-print-style">
+    @page { size: A4 portrait; margin: 10mm 10mm; }
+  </style>
+
+  <style>
+    :root {
+      --bg-main: #F1F5F9;
+      --accent: #059669; /* エメラルド */
+    }
+    body {
+      background-color: var(--bg-main);
+      font-family: 'Noto Sans JP', sans-serif;
+      color: #1E293B;
+    }
+    .font-mono-custom {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .bento-card {
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+      padding: 1.25rem;
+    }
+    .nav-tab {
+      padding: 0.75rem 1.25rem;
+      font-weight: 600;
+      color: #64748B;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .nav-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    /* カスタムアラート */
+    #custom-alert {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 2rem;
+      border-radius: 1rem;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+      z-index: 1000;
+      min-width: 320px;
+    }
+    #alert-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 999;
+    }
+
+    /* ノート風罫線 (フリー記入欄) */
+    .note-lines {
+      min-height: 150px;
+      background-image: repeating-linear-gradient(transparent, transparent 31px, #cbd5e1 31px, #cbd5e1 32px);
+      background-position: top;
+      margin-top: 1rem;
+      border-top: 1px solid #cbd5e1;
+    }
+
+    /* Print Specific Styles */
+    #print-report-title, #print-page-2-header {
+      display: none;
+    }
+
+    @media print {
+      /* 背景グラフィックスを強制表示 */
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      html, body { height: auto; background: white !important; }
+      .no-print { display: none !important; }
+      
+      #print-report-title {
+        display: block !important;
+        text-align: center;
+        font-size: 18pt;
+        font-weight: bold;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #1e293b;
+      }
+
+      #print-page-2-header {
+        display: block !important;
+        font-size: 11pt;
+        font-weight: bold;
+        color: #64748B;
+        margin-bottom: 10px;
+        text-align: right;
+      }
+
+      .stats-container {
+        display: grid !important;
+        grid-template-columns: repeat(4, 1fr) !important;
+        gap: 6px !important;
+        margin-bottom: 12px !important;
+      }
+
+      .bento-card.stat-card {
+        min-height: 50px !important;
+        padding: 6px 10px !important;
+      }
+
+      .analysis-grid { display: block !important; }
+
+      /* 1ページ目のメインカードを固定するための設定 */
+      #print-page-1-main-card {
+        break-after: page !important;
+        page-break-after: always !important;
+        margin-bottom: 0 !important;
+        border: 1px solid #e2e8f0 !important;
+        box-shadow: none !important;
+      }
+
+      /* テーブルが長くなった場合に1ページ目から溢れないよう、印刷時のみスタイル調整 */
+      #table-business-category tr td {
+        padding-top: 2px !important;
+        padding-bottom: 2px !important;
+        font-size: 9pt !important;
+      }
+
+      .bento-card {
+        box-shadow: none !important;
+        border: 1px solid #e2e8f0 !important;
+        margin-bottom: 12px !important;
+        padding: 12px !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
+        width: 100% !important;
+      }
+
+      #print-page-2-start-container {
+        page-break-before: always !important;
+        break-before: page !important;
+        margin-top: 10px;
+      }
+
+      .overflow-y-auto { overflow: visible !important; max-height: none !important; }
+      canvas { max-width: 100% !important; height: 250px !important; }
+
+      /* 表印刷モーダル用のスタイル切替 */
+      body.printing-table > .max-w-7xl,
+      body.printing-table > #custom-alert,
+      body.printing-table > #alert-overlay {
+         display: none !important;
+      }
+
+      body.printing-table #table-print-modal {
+         display: flex !important;
+         position: absolute;
+         left: 0;
+         top: 0;
+         width: 100%;
+         height: auto;
+         background: white;
+      }
+      
+      body.printing-table #table-print-modal > div {
+         width: 100% !important;
+         box-shadow: none !important;
+         margin: 0 !important;
+      }
+
+      body.printing-table .no-print-modal {
+         display: none !important;
+      }
+
+      body.printing-table .print-target-area {
+         padding: 0 !important;
+      }
+    }
+  </style>
+</head>
+<body class="p-4 md:p-6">
+
+  <div id="alert-overlay"></div>
+  <div id="custom-alert">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="p-2 bg-emerald-100 text-emerald-600 rounded-full">
+        <i data-lucide="check-circle-2"></i>
+      </div>
+      <h3 class="font-bold text-lg">完了</h3>
+    </div>
+    <div id="alert-content" class="text-slate-600 text-sm mb-6 leading-relaxed"></div>
+    <button onclick="closeAlert()" class="w-full bg-slate-800 text-white py-2 rounded-lg font-bold hover:bg-slate-700">OK</button>
+  </div>
+
+  <div class="max-w-7xl mx-auto">
+    <div id="print-report-title"></div>
+
+    <!-- Header -->
+    <header class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
+      <div class="flex items-center gap-3">
+        <div class="p-2 bg-emerald-600 rounded-lg text-white">
+          <i data-lucide="bar-chart-3"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold text-slate-800">データインポート・分析</h1>
+          <p class="text-slate-500 text-xs">正確な数値入力と現場分析の共創パートナー</p>
+        </div>
+      </div>
+      
+      <nav class="flex bg-white rounded-lg p-1 shadow-sm no-print">
+        <button onclick="switchTab('analysis')" id="tab-analysis" class="nav-tab active flex items-center gap-2">
+          <i data-lucide="layout-dashboard" class="w-4 h-4"></i>分析
+        </button>
+        <button onclick="switchTab('import')" id="tab-import" class="nav-tab flex items-center gap-2">
+          <i data-lucide="file-up" class="w-4 h-4"></i>取込
+        </button>
+      </nav>
+    </header>
+
+    <main>
+      <!-- ① Analysis Tab -->
+      <section id="content-analysis" class="tab-content">
+        <!-- Filter Bar -->
+        <div class="bento-card flex flex-wrap items-center gap-6 py-3 px-6 mb-4 no-print">
+          <div class="flex items-center gap-3">
+            <span class="text-xs font-bold text-slate-400 uppercase">現場</span>
+            <select id="filter-project" class="text-sm border-slate-200 rounded-lg px-3 py-1.5 bg-slate-50 focus:ring-2 focus:ring-emerald-500 outline-none">
+              <option value="all">すべての現場</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs font-bold text-slate-400 uppercase">期間</span>
+            <select id="filter-period-type" class="text-sm border-slate-200 rounded-lg px-3 py-1.5 bg-slate-50 focus:ring-2 focus:ring-emerald-500 outline-none" onchange="toggleDateInput()">
+              <option value="monthly" selected>月次</option>
+              <option value="yearly">年次</option>
+              <option value="all">全期間</option>
+            </select>
+            <input type="month" id="filter-month" class="text-sm border-slate-200 rounded-lg px-3 py-1.5 bg-slate-50 focus:ring-2 focus:ring-emerald-500 outline-none">
+            <select id="filter-year" class="hidden text-sm border-slate-200 rounded-lg px-3 py-1.5 bg-slate-50 focus:ring-2 focus:ring-emerald-500 outline-none">
+              <option value="2024">2024年</option>
+              <option value="2025">2025年</option>
+              <option value="2026">2026年</option>
+            </select>
+          </div>
+          <button id="btn-refresh" onclick="refreshAnalysis()" class="ml-auto bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-emerald-700 flex items-center gap-2 transition">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>更新
+          </button>
+          <button onclick="prepareAndPrint()" class="bg-slate-700 text-white px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-slate-800 flex items-center gap-2 transition">
+            <i data-lucide="printer" class="w-4 h-4"></i>印刷
+          </button>
+          <button onclick="prepareAndPrintTable()" class="bg-teal-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-teal-700 flex items-center gap-2 transition">
+            <i data-lucide="table" class="w-4 h-4"></i>表印刷
+          </button>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="stats-container grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <div class="bento-card stat-card flex flex-col justify-center min-h-[100px]">
+            <span class="text-slate-400 text-xs font-bold uppercase mb-1">総投入人役</span>
+            <span class="text-2xl font-bold font-mono-custom text-slate-800" id="stat-labor">0 <small class="text-xs font-normal">人役</small></span>
+          </div>
+          <div class="bento-card stat-card flex flex-col justify-center min-h-[100px] border-l-4 border-emerald-500">
+            <span class="text-emerald-600 text-xs font-bold uppercase mb-1">平均生産性</span>
+            <span class="text-2xl font-bold font-mono-custom text-emerald-600" id="stat-productivity">0.0 <small class="text-xs font-normal">m³/人役</small></span>
+          </div>
+          <div class="bento-card stat-card flex flex-col justify-center min-h-[100px]">
+            <span class="text-slate-400 text-xs font-bold uppercase mb-1">実働日数</span>
+            <span class="text-2xl font-bold font-mono-custom text-slate-800" id="stat-days">0 <small class="text-xs font-normal">日</small></span>
+          </div>
+          <div class="bento-card stat-card flex flex-col justify-center min-h-[100px] border-l-4 border-slate-300">
+            <span class="text-slate-400 text-xs font-bold uppercase mb-1">ステータス</span>
+            <p class="text-xl font-bold text-slate-800">正常</p>
+          </div>
+        </div>
+
+        <div class="analysis-grid grid grid-cols-1 md:grid-cols-4 gap-4">
+          <!-- Business Category (1st Page Main) -->
+          <div id="print-page-1-main-card" class="bento-card col-span-1 md:col-span-4">
+            <h3 class="font-bold mb-4 text-sm text-slate-700 flex items-center gap-2 border-b pb-2">
+              <i data-lucide="layers" class="w-4 h-4 text-emerald-600"></i>事業・作業種別 人役内訳
+            </h3>
+            <div class="flex flex-col lg:flex-row gap-8">
+              <div class="w-full lg:w-3/5 h-[350px] relative">
+                 <canvas id="chart-business-category"></canvas>
+              </div>
+              <div class="w-full lg:w-2/5 overflow-y-auto max-h-[350px]">
+                 <table class="w-full text-sm">
+                   <thead class="bg-slate-50 text-slate-500 text-xs uppercase sticky top-0 shadow-sm">
+                     <tr>
+                       <th class="py-2 px-3 text-left rounded-l-lg">事業種 / 作業種</th>
+                       <th class="py-2 px-3 text-right rounded-r-lg">人役</th>
+                     </tr>
+                   </thead>
+                   <tbody id="table-business-category" class="divide-y divide-slate-100"></tbody>
+                 </table>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 2nd Page Start Container -->
+          <div id="print-page-2-start-container" class="col-span-1 md:col-span-4">
+            <div id="print-page-2-header"></div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <!-- 出荷材積・生産性推移 -->
+              <div class="bento-card col-span-1 md:col-span-2">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+                  <h3 class="font-bold text-sm text-slate-700 flex items-center gap-2">
+                    <i data-lucide="trending-up" class="w-4 h-4 text-emerald-600"></i>出荷材積・生産性推移
+                  </h3>
+                  <div class="flex flex-wrap items-center gap-3 text-xs font-bold text-slate-600">
+                    <span class="flex items-center gap-1.5"><div class="w-6 h-3 bg-emerald-600"></div> 実績(丸太)</span>
+                    <span class="flex items-center gap-1.5"><div class="w-6 h-3 bg-orange-500"></div> 実績(チップ)</span>
+                    <span class="flex items-center gap-1.5"><div class="w-6 h-0 border-t-2 border-emerald-800"></div> 生産性</span>
+                    <span class="flex items-center gap-1.5"><div class="w-8 h-3 border-2 border-dashed border-orange-500 bg-gray-200"></div> 目標 (5.0)</span>
+                  </div>
+                </div>
+                <div class="h-[300px] relative">
+                   <canvas id="chart-productivity-trend"></canvas>
+                </div>
+              </div>
+
+              <!-- Member Analysis -->
+              <div class="bento-card col-span-1 md:col-span-2">
+                <h3 class="font-bold mb-4 text-sm text-slate-700 flex items-center gap-2">
+                  <i data-lucide="users" class="w-4 h-4 text-emerald-600"></i>作業員別 配置・作業内訳
+                </h3>
+                <div class="h-[250px] relative">
+                   <canvas id="chart-member-ratio"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ② Import Tab -->
+      <section id="content-import" class="tab-content hidden">
+        <div class="bento-card">
+          <div class="flex items-center gap-2 mb-2">
+            <i data-lucide="clipboard-paste" class="text-emerald-600 w-5 h-5"></i>
+            <h2 class="text-lg font-bold">日報データ取込</h2>
+          </div>
+          <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-500 uppercase mb-1">現場名</label>
+              <select id="import-project-select" onchange="handleProjectSelectChange()" class="w-full text-sm border-slate-300 rounded-lg p-2">
+                <option value="">選択...</option>
+                <option value="new">+ 新規追加...</option>
+              </select>
+            </div>
+            <div id="new-project-wrapper" class="hidden">
+              <label class="block text-xs font-bold text-emerald-600 uppercase mb-1">新規現場名</label>
+              <input type="text" id="import-project-new" class="w-full text-sm border-emerald-300 rounded-lg p-2 bg-emerald-50" placeholder="現場名を入力">
+            </div>
+          </div>
+          <textarea id="paste-area" class="w-full h-40 p-4 border-2 border-dashed border-slate-300 rounded-xl focus:outline-none focus:border-emerald-500 focus:bg-emerald-50 transition resize-y text-sm font-mono-custom" placeholder="Excelの日報データを貼り付けてください"></textarea>
+          <div id="import-preview-section" class="mt-6 hidden">
+            <div class="flex justify-between items-center mb-4 bg-emerald-50 p-4 rounded-xl border border-emerald-100">
+              <h3 class="font-bold text-slate-700 text-sm">解析結果: <span id="new-count" class="text-emerald-600 font-mono-custom text-lg">0</span> 件 </h3>
+              <button id="btn-save" onclick="saveImportData()" class="bg-emerald-600 text-white px-8 py-2 rounded-lg text-sm font-bold hover:bg-emerald-700 transition flex items-center gap-2">
+                <i data-lucide="check-circle" class="w-5 h-5"></i> 保存
+              </button>
+            </div>
+            <div class="overflow-x-auto border rounded-lg max-h-[400px] bg-white">
+              <table class="w-full text-[11px] text-left">
+                <thead class="bg-slate-100 text-slate-600 border-b sticky top-0">
+                  <tr><th class="p-3">日付</th><th class="p-3">作業者</th><th class="p-3">事業種</th><th class="p-3">作業種</th><th class="p-3 text-right">人役</th></tr>
+                </thead>
+                <tbody id="preview-body" class="divide-y"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- 表印刷用モーダル -->
+  <div id="table-print-modal" class="fixed inset-0 z-[2000] bg-slate-900/80 flex justify-center overflow-y-auto hidden">
+    <div class="bg-white w-[297mm] min-h-[210mm] my-8 shadow-2xl relative flex flex-col">
+       <div class="flex justify-between items-center p-4 border-b bg-slate-50 no-print-modal sticky top-0 z-10">
+          <h2 class="font-bold text-lg text-slate-800">現場一覧表 印刷プレビュー</h2>
+          <div class="flex gap-4">
+             <button onclick="printTableModal()" class="bg-teal-600 text-white px-5 py-2 rounded-lg font-bold hover:bg-teal-700 flex items-center gap-2 transition">
+               <i data-lucide="printer" class="w-5 h-5"></i> A4横で印刷
+             </button>
+             <button onclick="closeTableModal()" class="bg-slate-300 text-slate-700 px-5 py-2 rounded-lg font-bold hover:bg-slate-400 transition">閉じる</button>
+          </div>
+       </div>
+       
+       <div class="p-8 flex-grow flex flex-col print-target-area">
+          <h1 class="text-xl font-bold text-center mb-6" id="table-modal-title">現場一覧報告書</h1>
+          <p class="text-xs text-slate-500 mb-2 no-print-modal">※空欄や数値はクリックして直接編集できます。印刷時にはそのまま出力されます。</p>
+          
+          <table class="w-full text-[11px] border-collapse border border-slate-400">
+             <thead class="bg-slate-100">
+                <tr>
+                   <th class="border border-slate-400 px-1 py-2 text-center w-[12%]">現場名</th>
+                   <th class="border border-slate-400 px-1 py-2 text-center w-[10%]">事業種</th>
+                   <th class="border border-slate-400 px-1 py-2 text-center w-[10%]">工期</th>
+                   <th class="border border-slate-400 px-1 py-2 text-center w-[7%]">計画面積</th>
+                   <th class="border border-slate-400 px-1 py-2 text-center w-[7%]">施業済</th>
+                   <th class="border border-slate-400 px-1 py-2 text-center w-[7%] bg-emerald-100/50">当月面積</th>
+                   <th class="border border-slate-400 px-1 py-2 text-center w-[8%]">免税期間</th>
+                   <th class="border border-slate-400 px-1 py-2 text-center w-[7%]">間伐(m³)</th>
+                   <th class="border border-slate-400 px-1 py-2 text-center w-[7%]">皆伐(m³)</th>
+                   <th class="border border-slate-400 px-1 py-2 text-center w-[7%]">チップ(m³)</th>
+                   <th class="border border-slate-400 px-1 py-2 text-center w-[10%]">材収(円)</th>
+                </tr>
+             </thead>
+             <tbody id="table-modal-body">
+             </tbody>
+          </table>
+
+          <div class="mt-6 flex-grow flex flex-col">
+             <h3 class="font-bold text-slate-700 text-sm mb-1">【特記事項・メモ】</h3>
+             <div class="flex-grow note-lines"></div>
+          </div>
+       </div>
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    function showResult(message) {
+      document.getElementById('alert-content').innerHTML = message;
+      document.getElementById('alert-overlay').style.display = 'block';
+      document.getElementById('custom-alert').style.display = 'block';
+    }
+    function closeAlert() {
+      document.getElementById('alert-overlay').style.display = 'none';
+      document.getElementById('custom-alert').style.display = 'none';
+    }
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
+      document.getElementById('content-' + tabId).classList.remove('hidden');
+      document.getElementById('tab-' + tabId).classList.add('active');
+      if (tabId === 'analysis') refreshAnalysis();
+    }
+    function toggleDateInput() {
+      const type = document.getElementById('filter-period-type').value;
+      document.getElementById('filter-month').classList.toggle('hidden', type !== 'monthly');
+      document.getElementById('filter-year').classList.toggle('hidden', type !== 'yearly');
+    }
+    function handleProjectSelectChange() {
+      const select = document.getElementById('import-project-select');
+      const wrapper = document.getElementById('new-project-wrapper');
+      if (select.value === 'new') wrapper.classList.remove('hidden');
+      else wrapper.classList.add('hidden');
+    }
+
+    function prepareAndPrint() {
+      const projectSelect = document.getElementById('filter-project');
+      const projectName = projectSelect.options[projectSelect.selectedIndex].text;
+      const periodType = document.getElementById('filter-period-type').value;
+      let periodLabel = "";
+      if (periodType === 'monthly') {
+        const monthVal = document.getElementById('filter-month').value;
+        if (monthVal) { const [y, m] = monthVal.split('-'); periodLabel = `${y}年${parseInt(m)}月`; }
+      } else if (periodType === 'yearly') { periodLabel = document.getElementById('filter-year').value + "年"; }
+      else { periodLabel = "全期間"; }
+
+      document.getElementById('print-report-title').textContent = `${projectName} ${periodLabel} 業務分析報告書`;
+      document.getElementById('print-page-2-header').textContent = `${projectName} （${periodLabel}） 業務詳細`;
+      window.print();
+    }
+
+    let currentTablePrintData = [];
+
+    function prepareAndPrintTable() {
+      if (!currentTablePrintData || currentTablePrintData.length === 0) {
+        alert('印刷するデータがありません。');
+        return;
+      }
+      
+      const projectSelect = document.getElementById('filter-project');
+      const projectName = projectSelect.options[projectSelect.selectedIndex].text;
+      const periodType = document.getElementById('filter-period-type').value;
+      let periodLabel = "";
+      if (periodType === 'monthly') {
+        const monthVal = document.getElementById('filter-month').value;
+        if (monthVal) { const [y, m] = monthVal.split('-'); periodLabel = `${y}年${parseInt(m)}月`; }
+      } else if (periodType === 'yearly') { periodLabel = document.getElementById('filter-year').value + "年"; }
+      else { periodLabel = "全期間"; }
+
+      const titlePrefix = projectName === "すべての現場" ? "" : `${projectName} `;
+      document.getElementById('table-modal-title').textContent = `${titlePrefix}${periodLabel} 現場一覧報告書`;
+
+      const tbody = document.getElementById('table-modal-body');
+      tbody.innerHTML = '';
+
+      currentTablePrintData.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="border border-slate-400 px-2 py-1.5 font-bold outline-none hover:bg-slate-50 transition" contenteditable="true">${row.name}</td>
+          <td class="border border-slate-400 px-2 py-1.5 outline-none hover:bg-slate-50 transition" contenteditable="true">${row.businessType}</td>
+          <td class="border border-slate-400 px-2 py-1.5 text-center outline-none hover:bg-slate-50 transition" contenteditable="true">${row.period}</td>
+          <td class="border border-slate-400 px-2 py-1.5 text-right font-mono-custom outline-none hover:bg-slate-50 transition" contenteditable="true">${row.plannedArea ? row.plannedArea.toFixed(2) : ''}</td>
+          <td class="border border-slate-400 px-2 py-1.5 text-right font-mono-custom outline-none hover:bg-slate-50 transition" contenteditable="true">${row.doneAreaCumulative ? row.doneAreaCumulative.toFixed(2) : ''}</td>
+          <td class="border border-slate-400 px-2 py-1.5 text-right font-mono-custom bg-emerald-50 outline-none hover:bg-emerald-100 transition" contenteditable="true">${row.currentArea ? row.currentArea.toFixed(2) : ''}</td>
+          <td class="border border-slate-400 px-2 py-1.5 text-center outline-none hover:bg-slate-50 transition" contenteditable="true">${row.taxFree}</td>
+          <td class="border border-slate-400 px-2 py-1.5 text-right font-mono-custom outline-none hover:bg-slate-50 transition" contenteditable="true">${row.volKanbatsu ? row.volKanbatsu.toFixed(1) : ''}</td>
+          <td class="border border-slate-400 px-2 py-1.5 text-right font-mono-custom outline-none hover:bg-slate-50 transition" contenteditable="true">${row.volKaibatsu ? row.volKaibatsu.toFixed(1) : ''}</td>
+          <td class="border border-slate-400 px-2 py-1.5 text-right font-mono-custom outline-none hover:bg-slate-50 transition" contenteditable="true">${row.volChip ? row.volChip.toFixed(1) : ''}</td>
+          <td class="border border-slate-400 px-2 py-1.5 text-right font-mono-custom outline-none hover:bg-slate-50 transition" contenteditable="true">${row.revenue ? row.revenue.toLocaleString() : ''}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('table-print-modal').classList.remove('hidden');
+    }
+
+    function closeTableModal() {
+      document.getElementById('table-print-modal').classList.add('hidden');
+    }
+
+    function printTableModal() {
+      const style = document.getElementById('dynamic-print-style');
+      style.innerHTML = '@page { size: A4 landscape; margin: 10mm; }';
+      document.body.classList.add('printing-table');
+      
+      window.print();
+      
+      // 印刷ダイアログを閉じたあとに元に戻す
+      setTimeout(() => {
+        document.body.classList.remove('printing-table');
+        style.innerHTML = '@page { size: A4 portrait; margin: 10mm 10mm; }';
+      }, 500);
+    }
+
+    // TSV解析
+    function parseTSV(text) {
+      const result = [];
+      let row = []; let col = ""; let inQuotes = false;
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (char === '"') { inQuotes = !inQuotes; continue; }
+        if (char === '\t' && !inQuotes) { row.push(col.trim()); col = ""; continue; }
+        if ((char === '\r' || char === '\n') && !inQuotes) {
+          row.push(col.trim());
+          if (row.length > 1) result.push(row);
+          row = []; col = ""; continue;
+        }
+        col += char;
+      }
+      if (col !== "" || row.length > 0) { row.push(col.trim()); result.push(row); }
+      return result;
+    }
+
+    document.getElementById('paste-area').addEventListener('input', function(e) {
+      const text = e.target.value;
+      if (!text.trim()) { document.getElementById('import-preview-section').classList.add('hidden'); return; }
+      const rows = parseTSV(text);
+      const previewBody = document.getElementById('preview-body');
+      previewBody.innerHTML = '';
+      let validCount = 0;
+      rows.forEach(cols => {
+        if (cols.length >= 20 && String(cols[0]).match(/^\d+$/)) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="p-3 border-b">${cols[1] || ''}</td><td class="p-3 border-b">${cols[6] || '-'}</td><td class="p-3 border-b">${cols[17] || '-'}</td><td class="p-3 border-b font-medium">${cols[19] || '-'}</td><td class="p-3 border-b text-right font-mono-custom">${cols[4] || '0'}</td>`;
+          previewBody.appendChild(tr);
+          validCount++;
+        }
+      });
+      if (validCount > 0) {
+        document.getElementById('new-count').textContent = validCount;
+        document.getElementById('import-preview-section').classList.remove('hidden');
+      } else {
+        document.getElementById('import-preview-section').classList.add('hidden');
+      }
+    });
+
+    function saveImportData() {
+      const btn = document.getElementById('btn-save');
+      const projectSelect = document.getElementById('import-project-select');
+      const projectNew = document.getElementById('import-project-new');
+      const pasteData = document.getElementById('paste-area').value.trim();
+      let targetProject = projectSelect.value;
+      if (targetProject === 'new') targetProject = projectNew.value.trim();
+      if (!targetProject) { alert('現場名を選択または入力してください。'); return; }
+      btn.disabled = true;
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '保存中...';
+      if (typeof google !== 'undefined' && google.script) {
+        google.script.run
+          .withSuccessHandler((res) => {
+            showResult(`${res.count} 件 の取り込みに成功しました。`);
+            document.getElementById('paste-area').value = '';
+            document.getElementById('import-preview-section').classList.add('hidden');
+            btn.disabled = false; btn.innerHTML = originalText;
+            loadProjects(); refreshAnalysis();
+          })
+          .withFailureHandler((err) => { alert('エラー: ' + err); btn.disabled = false; btn.innerHTML = originalText; })
+          .importDailyReports(pasteData, targetProject);
+      }
+    }
+
+    let businessChart, memberRatioChart, productivityTrendChart;
+    const colorPalette = ['#059669', '#3B82F6', '#F59E0B', '#8B5CF6', '#EF4444', '#14B8A6', '#F97316', '#6366F1'];
+
+    function refreshAnalysis() {
+      const btn = document.getElementById('btn-refresh');
+      if(!btn) return;
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '読込中...';
+      const filters = {
+        project: document.getElementById('filter-project').value,
+        periodType: document.getElementById('filter-period-type').value,
+        month: document.getElementById('filter-month').value,
+        year: document.getElementById('filter-year').value
+      };
+      if (typeof google !== 'undefined' && google.script) {
+        google.script.run
+          .withSuccessHandler((data) => { updateDashboard(data); btn.innerHTML = originalText; })
+          .withFailureHandler((err) => { alert('エラー: ' + err); btn.innerHTML = originalText; })
+          .getAnalysisData(filters);
+      } else {
+        setTimeout(() => { renderDummyData(); btn.innerHTML = originalText; }, 500);
+      }
+    }
+
+    function renderDummyData() {
+      const now = new Date();
+      const mLabel = (m) => { const d = new Date(now.getFullYear(), now.getMonth() - m, 1); return `${d.getFullYear()}-${('0'+(d.getMonth()+1)).slice(-2)}`; };
+      
+      const dummyData = {
+        statLabor: "215.5", statDays: 45, statProductivity: "5.2",
+        businessCategory: {
+          labels: ['伐出事業', '造林事業', '作業道開設'],
+          datasets: [
+            { label: '伐倒', data: [85, 0, 15] }, { label: '集材', data: [65, 0, 5] },
+            { label: '植栽', data: [0, 30, 0] }, { label: 'その他', data: [10, 5, 5] }
+          ],
+          table: [
+            { business: '伐出事業', total: 160, details: [{work: '伐倒', labor: 85}, {work: '集材', labor: 65}, {work: 'その他', labor: 10}] },
+            { business: '造林事業', total: 35, details: [{work: '植栽', labor: 30}, {work: 'その他', labor: 5}] },
+            { business: '作業道開設', total: 20, details: [{work: '伐倒', labor: 15}, {work: 'その他', labor: 5}] }
+          ]
+        },
+        memberAnalysis: {
+          labels: ['山田太郎', '鈴木一郎', '佐藤次郎', '田中三郎'],
+          datasets: [
+            { label: '伐倒', data: [30, 25, 20, 10] }, { label: '集材', data: [20, 30, 10, 5] }
+          ]
+        },
+        productivityTrend: {
+          labels: [mLabel(5), mLabel(4), mLabel(3), mLabel(2), mLabel(1), mLabel(0)],
+          volLogData: [150, 180, 210, 160, 190, 220],
+          volChipData: [40, 50, 65, 45, 55, 70],
+          prodData: [4.5, 4.8, 5.3, 5.0, 5.4, 5.8],
+          periodType: 'monthly'
+        }
+      };
+      // ダミーの表印刷データ
+      dummyData.tablePrintData = [
+        {name: "大峯山", businessType: "伐出事業", period: "2025/10〜2026/03", plannedArea: 5.50, doneAreaCumulative: 4.00, currentArea: 1.50, taxFree: "R5-R8", volKanbatsu: 200, volKaibatsu: 0, volChip: 50, revenue: 1500000},
+        {name: "小峯山", businessType: "造林事業", period: "2026/01〜2026/03", plannedArea: 3.00, doneAreaCumulative: 1.00, currentArea: 2.00, taxFree: "", volKanbatsu: 0, volKaibatsu: 0, volChip: 0, revenue: 0},
+        {name: "中峯山", businessType: "作業道開設", period: "2026/02〜2026/05", plannedArea: 0, doneAreaCumulative: 0, currentArea: 0, taxFree: "", volKanbatsu: 15.5, volKaibatsu: 0, volChip: 0, revenue: 150000}
+      ];
+      updateDashboard(dummyData);
+    }
+
+    function updateDashboard(data) {
+      if (!data) return;
+      currentTablePrintData = data.tablePrintData || [];
+      document.getElementById('stat-labor').innerHTML = `${data.statLabor} <small class="text-xs font-normal">人役</small>`;
+      document.getElementById('stat-productivity').innerHTML = `${data.statProductivity} <small class="text-xs font-normal">m³/人役</small>`;
+      document.getElementById('stat-days').innerHTML = `${data.statDays} <small class="text-xs font-normal">日</small>`;
+      renderCharts(data); renderTable(data.businessCategory.table);
+      lucide.createIcons();
+    }
+
+    function renderTable(tableData) {
+      const tbody = document.getElementById('table-business-category');
+      tbody.innerHTML = '';
+      tableData.forEach(biz => {
+        const trBiz = document.createElement('tr');
+        trBiz.className = 'bg-slate-50 border-t';
+        trBiz.innerHTML = `<td class="py-2 px-3 font-bold">${biz.business}</td><td class="py-2 px-3 font-bold text-right text-emerald-700">${biz.total}</td>`;
+        tbody.appendChild(trBiz);
+        biz.details.forEach(detail => {
+          const trWork = document.createElement('tr');
+          trWork.innerHTML = `<td class="py-1.5 px-3 pl-8 text-slate-500 flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-slate-300"></div>${detail.work}</td><td class="py-1.5 px-3 text-right text-slate-600 font-mono-custom">${detail.labor}</td>`;
+          tbody.appendChild(trWork);
+        });
+      });
+    }
+
+    function renderCharts(data) {
+      const ctxBiz = document.getElementById('chart-business-category').getContext('2d');
+      const ctxMember = document.getElementById('chart-member-ratio').getContext('2d');
+      const ctxProd = document.getElementById('chart-productivity-trend').getContext('2d');
+
+      if (businessChart) businessChart.destroy();
+      if (memberRatioChart) memberRatioChart.destroy();
+      if (productivityTrendChart) productivityTrendChart.destroy();
+
+      // 事業別内訳
+      data.businessCategory.datasets.forEach((ds, idx) => { ds.backgroundColor = colorPalette[idx % colorPalette.length]; });
+      businessChart = new Chart(ctxBiz, {
+        type: 'bar', data: { labels: data.businessCategory.labels, datasets: data.businessCategory.datasets },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { stacked: true }, y: { stacked: true } }, plugins: { legend: { position: 'bottom' } } }
+      });
+
+      // 出荷材積・生産性推移
+      productivityTrendChart = new Chart(ctxProd, {
+        data: {
+          labels: data.productivityTrend.labels,
+          datasets: [
+            {
+              type: 'bar',
+              label: '実績(丸太)',
+              data: data.productivityTrend.volLogData,
+              backgroundColor: '#059669',
+              yAxisID: 'y',
+              order: 3
+            },
+            {
+              type: 'bar',
+              label: '実績(チップ)',
+              data: data.productivityTrend.volChipData,
+              backgroundColor: '#f97316',
+              yAxisID: 'y',
+              order: 2
+            },
+            {
+              type: 'line',
+              label: '生産性',
+              data: data.productivityTrend.prodData,
+              borderColor: '#065f46',
+              borderWidth: 3,
+              tension: 0.1,
+              yAxisID: 'y1',
+              pointBackgroundColor: '#065f46',
+              order: 1
+            },
+            {
+              type: 'line',
+              label: '目標(5.0)',
+              data: data.productivityTrend.labels.map(() => 5),
+              borderColor: '#f97316',
+              borderWidth: 1.5,
+              borderDash: [5, 5],
+              pointRadius: 0,
+              yAxisID: 'y1',
+              order: 0
+            }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: {
+            y: { 
+              beginAtZero: true,
+              position: 'left',
+              stacked: false,
+              title: { display: true, text: '材積 (m³)', font: { size: 10 } }
+            },
+            y1: { 
+              beginAtZero: true,
+              suggestedMax: 6,
+              position: 'right',
+              grid: { drawOnChartArea: false },
+              title: { display: true, text: '生産性 (m³/人役)', font: { size: 10 } }
+            }
+          },
+          plugins: { legend: { display: false } }
+        }
+      });
+
+      // 作業員別
+      data.memberAnalysis.datasets.forEach((ds, idx) => { ds.backgroundColor = colorPalette[idx % colorPalette.length]; });
+      memberRatioChart = new Chart(ctxMember, {
+        type: 'bar', data: { labels: data.memberAnalysis.labels, datasets: data.memberAnalysis.datasets },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { stacked: true }, y: { stacked: true } } }
+      });
+    }
+
+    function loadProjects() {
+      if (typeof google !== 'undefined' && google.script) {
+        google.script.run.withSuccessHandler((projects) => {
+          const importProjSelect = document.getElementById('import-project-select');
+          const filterProj = document.getElementById('filter-project');
+          importProjSelect.innerHTML = '<option value="">選択...</option><option value="new">+ 新規追加...</option>';
+          filterProj.innerHTML = '<option value="all">すべての現場</option>';
+          projects.forEach(p => {
+            const opt = document.createElement('option'); opt.value = p; opt.textContent = p;
+            importProjSelect.appendChild(opt.cloneNode(true)); filterProj.appendChild(opt);
+          });
+        }).getProjectList();
+      }
+    }
+
+    window.onload = () => {
+      const now = new Date();
+      document.getElementById('filter-month').value = `${now.getFullYear()}-${('0'+(now.getMonth()+1)).slice(-2)}`;
+      document.getElementById('filter-year').value = `${now.getFullYear()}`;
+      refreshAnalysis(); loadProjects();
+    };
+  </script>
+</body>
+</html>
