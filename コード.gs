@@ -9,11 +9,15 @@ function doGet() {
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+// ========== 修正ポイント: データ参照先のスプレッドシートIDを定義 ==========
+const DATA_SS_ID = "1hlzou-dX-hBmUwryu1YJgme4_IOiP4V8CswMQc3YXac";
+
 /**
  * 分析用データを取得する
  */
 function getAnalysisData(filters) {
-  const ss = SpreadsheetApp.openById("1-HV-cb7tPiOvTD4nzKnlhfmPnfr59Kq2qxNNsSlblWU");
+  // 変更: 新しいスプレッドシートIDを参照
+  const ss = SpreadsheetApp.openById(DATA_SS_ID);
   
   let totalLabor = 0;
   let uniqueDays = new Set();
@@ -91,10 +95,8 @@ function getAnalysisData(filters) {
     categoryData[businessType][workType] = (categoryData[businessType][workType] || 0) + labor;
   });
 
-  // ========== 修正ポイント: 進捗管理シートを新しいファイルから取得する ==========
-  const progressSs = SpreadsheetApp.openById("1hlzou-dX-hBmUwryu1YJgme4_IOiP4V8CswMQc3YXac");
-  const progressSheet = progressSs.getSheetByName('施業管理アプリ - 進捗管理');
-  
+  // 進捗管理（材積）の取得ロジック（日報と同じファイルから取得）
+  const progressSheet = ss.getSheetByName('施業管理アプリ - 進捗管理');
   let totalVolumeLog = 0;
   let totalVolumeChip = 0;
   let monthlyVolumeLog = {}; 
@@ -275,7 +277,8 @@ function getAnalysisData(filters) {
  * 現場一覧を取得する
  */
 function getProjectList() {
-  const ss = SpreadsheetApp.openById("1-HV-cb7tPiOvTD4nzKnlhfmPnfr59Kq2qxNNsSlblWU");
+  // 変更: 新しいスプレッドシートIDを参照
+  const ss = SpreadsheetApp.openById(DATA_SS_ID);
   const importSheet = ss.getSheetByName("日報データ_取込");
   if (!importSheet) return [];
   const lastRow = importSheet.getLastRow();
@@ -318,7 +321,8 @@ function parseTSVForGAS(text) {
  */
 function importDailyReports(pasteData, targetProject) {
   try {
-    const ss = SpreadsheetApp.openById("1-HV-cb7tPiOvTD4nzKnlhfmPnfr59Kq2qxNNsSlblWU");
+    // 変更: 新しいスプレッドシートIDを参照
+    const ss = SpreadsheetApp.openById(DATA_SS_ID);
     const sheet = ss.getSheetByName("日報データ_取込");
     if (!sheet) throw new Error("「日報データ_取込」シートが見つかりません。");
 
