@@ -91,8 +91,10 @@ function getAnalysisData(filters) {
     categoryData[businessType][workType] = (categoryData[businessType][workType] || 0) + labor;
   });
 
-  // 進捗管理（材積）の取得ロジック
-  const progressSheet = ss.getSheetByName('施業管理アプリ - 進捗管理');
+  // ========== 修正ポイント: 進捗管理シートを新しいファイルから取得する ==========
+  const progressSs = SpreadsheetApp.openById("1hlzou-dX-hBmUwryu1YJgme4_IOiP4V8CswMQc3YXac");
+  const progressSheet = progressSs.getSheetByName('施業管理アプリ - 進捗管理');
+  
   let totalVolumeLog = 0;
   let totalVolumeChip = 0;
   let monthlyVolumeLog = {}; 
